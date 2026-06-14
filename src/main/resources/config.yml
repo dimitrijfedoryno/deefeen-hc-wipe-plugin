@@ -1,0 +1,248 @@
+# ============================================================================
+# HardcoreWipe – Konfigurace
+# ============================================================================
+# Tento plugin detekuje smrt hráče, spustí odpočet (BossBar + zvuky + titulky),
+# a po jeho skončení smaže složky se světem a restartuje server.
+#
+# Všechny nastavitelné hodnoty jsou níže – stačí upravit a restartovat server.
+# Barvy používají MineCraft barevné kódy (§ + písmeno/číslice).
+#   Platné barvy: https://minecraft.tools/en/color-code.php
+# ============================================================================
+
+# Verze configu – při změně se starý config zálohuje na config.yml.bak
+# a vytvoří se nový s výchozími hodnotami (tvá nastavení si pak musíš
+# přenést ručně ze zálohy).
+config-version: 2
+
+
+# ============================================================================
+# ODPOČET
+# ============================================================================
+
+# Délka odpočtu v sekundách mezi smrtí hráče a wipe.
+countdown-seconds: 30
+
+
+# ============================================================================
+# BOSS BAR (ukazatel průběhu nahoře uprostřed obrazovky)
+# ============================================================================
+
+bossbar:
+  # Barva bossbaru – RED, GREEN, BLUE, PURPLE, WHITE, PINK, YELLOW
+  color: RED
+
+  # Popisek bossbaru. {seconds} se nahradí aktuálním počtem zbývajících sekund.
+  title: "§c§lDOOMSDAY: Smazání světa za {seconds} sekund!"
+
+  # Vzhled – SOLID (plná), SEGMENTED_6, SEGMENTED_10, SEGMENTED_12, SEGMENTED_20
+  style: SOLID
+
+
+# ============================================================================
+# ZVUKY (hrají se každou sekundu odpočtu + alarm posledních 5 vteřin)
+# ============================================================================
+#
+# Názvy zvuků najdete zde:
+#   https://minecraft.wiki/w/Sounds.json#Sound_events
+# nebo přímo ve hře přes /playsound.
+#
+# Příklady:
+#   block.note_block.hat           – klasický 'ding'
+#   block.note_block.click         – tikání
+#   entity.experience_orb.pickup   – 'orb pickup'
+#   ui.button.click                – UI click
+#   entity.player.levelup          – levelup fanfára
+#   entity.wither.spawn            – alarm
+
+sounds:
+  # Zvuk při každém tiknutí odpočtu
+  tick: "block.note_block.click"
+
+  # Výška tónu tikání (0.5 = o oktávu níž, 2.0 = o oktávu výš)
+  tick-pitch: 1.0
+
+  # Zvuk alarmu (hraje se posledních 5 sekund)
+  alarm: "entity.experience_orb.pickup"
+
+  # Výška tónu alarmu
+  alarm-pitch: 1.5
+
+
+# ============================================================================
+# SCOREBOARD (sidebar vpravo – počet wipe runů)
+# ============================================================================
+
+scoreboard:
+  # Nadpis scoreboardu
+  title: "§6§lHARDCORE"
+
+  # Text řádku s počtem (číslovka se zobrazí napravo automaticky)
+  line: "§cSmrtí"
+
+
+# ============================================================================
+# SVĚTY (mazání world složek po wipu)
+# ============================================================================
+#
+# POZNÁMKA: Paper 26.1.2+ ukládá nether a end do podsložek world/DIM-1 a
+# world/DIM1 (nový formát). Staré samostatné složky world_nether/ a
+# world_the_end/ se po migraci dají kompletně smazat.
+
+worlds:
+  # true  = při wipu smazat world složky (doporučeno)
+  # false = pouze vytvořit wipe.txt a zastavit server (mazání řeší externí script)
+  enabled: true
+
+  # true  = vytvořit soubor wipe.txt v kořeni serveru (pro externí startovací script)
+  # false = nespoléhat na externí script
+  create-wipe-flag: true
+
+  # Seznam world složek, které se mají smazat (adresáře v kořeni serveru)
+  list:
+    - "world"
+
+  # Staré oddělené složky world_nether a world_the_end.
+  # Pokud je Paper už převedl do subfolderů world/DIM-1 a world/DIM1,
+  # tyhle původní složky se smažou kompletně (včetně celého adresáře).
+  remove-legacy-folders:
+    - "world_nether"
+    - "world_the_end"
+
+
+# ============================================================================
+# MOTD (zpráva v multiplayer seznamu serverů)
+# ============================================================================
+#
+# Barvy: § + písmeno/číslice (např. §6 = zlatá, §c = červená, §l = tučné)
+# Unicode: lze použít \u00a7 místo §
+
+motd:
+  # true  = plugin při startu nastaví MOTD
+  # false = nechat výchozí MOTD ze server.properties
+  enabled: true
+
+  # Text MOTD (podpora § barvy)
+  text: "§6§lHARDCORE WIPE §7- §cSmrt = reset světa"
+
+
+# ============================================================================
+# SERVER PROPERTIES (automatická úprava server.properties při startu)
+# ============================================================================
+#
+# POZOR: Změny se projeví až po restartu serveru (plugin je aplikuje hned
+# při startu, takže stačí restartovat jednou).
+#
+# Pokud tyto hodnoty nastavíš ručně v server.properties, plugin je při
+# každém startu přepíše podle svého configu.
+
+server-properties:
+  # true  = plugin při startu upraví server.properties
+  # false = nezasahovat do server.properties
+  enabled: true
+
+  # Nastavit hardcore=true (hráči po smrti dostanou ban)
+  hardcore: true
+
+  # Obtížnost: peaceful, easy, normal, hard
+  difficulty: hard
+
+
+# ============================================================================
+# DISCORD WEBHOOK (notifikace o wipu na Discord kanál)
+# ============================================================================
+#
+# Jak založit webhook na Discordu:
+#   1. Otevři nastavení Discord kanálu (Server Settings → Integrations → Webhooks)
+#   2. Klikni "New Webhook", pojmenuj ho (např. "HardcoreWipe")
+#   3. Zkopíruj Webhook URL a vlož ji níže pod `url:`
+#   4. Nastav enabled: true a restartuj server
+#
+# Blokujeme: {player} = jméno hráče, {seconds} = zbývající čas,
+# {wipe_count} = číslo wipu, {death_message} = zpráva o smrti
+
+discord-webhook:
+  # true = odesílat notifikace na Discord
+  # false = nic neposílat
+  enabled: false
+
+  # URL tvojí Discord Webhook (viz návod výše)
+  url: ""
+
+  # Volitelné: jméno bota (nech prázdné pro výchozí "HardcoreWipe")
+  bot-name: ""
+
+  # Volitelné: URL avatar obrázku bota (nech prázdné pro default)
+  avatar-url: ""
+
+  # Nastavení Embed zpráv
+  embed:
+    # true = posílat formátovanou Embedded zprávu (barevný rámeček, pole)
+    # false = posílat pouze prostý text
+    enabled: true
+
+    # Barva postranního pruhu v embedu (desítková hodnota)
+    # Běžné barvy:
+    #   16711680 = červená
+    #   16755200 = oranžová
+    #   16776960 = žlutá
+    #   65280   = zelená
+    color: 16711680
+
+  # Text zprávy při spuštění wipu (hráč zemřel, začal odpočet)
+  # Proměnné: {player}, {seconds}, {wipe_count}
+  trigger-title: "☠ WIPE TRIGGERED"
+  trigger-description: "**{player}** zemřel a spustil wipe č. **{wipe_count}**"
+
+  # Text zprávy po dokončení wipu (svět smazán, server se vypíná)
+  # Proměnné: {player}, {wipe_count}
+  complete-title: "✅ WIPE COMPLETE"
+  complete-description: "Svět smazán po smrti **{player}** (wipe č. **{wipe_count}**). Server se restartuje."
+
+  # Text zprávy při pojištění (soulinsure – zrušení wipu)
+  # Proměnné: {player} (ten kdo obětoval totem), {dead_player}, {wipe_count}
+  insured-title: "💚 SOUL INSURANCE"
+  insured-description: "**{player}** obětoval Totem oživení a zachránil wipe č. **{wipe_count}**!"
+
+
+# ============================================================================
+# CHATOVÉ ZPRÁVY (všechny hlášky, co plugin vypisuje do hry)
+# ============================================================================
+#
+# Proměnné: {player}, {seconds}, {world}, {error}, {runId},
+#           {deathMessage}, {timestamp}
+# Barvy: §c (červená), §a (zelená), §e (žlutá), §6 (zlatá),
+#        §7 (šedá), §8 (tmavě šedá), §l (tučné)
+
+messages:
+  # Hláška po smrti hráče – začátek odpočtu
+  death-broadcast: "§c[HARDCORE] Hráč {player} zemřel! Celý svět bude smazán a server se restartuje za {seconds} sekund!"
+
+  # Hláška v 10 sekundách
+  ten-seconds: "§e[HARDCORE] Zbývá posledních 10 sekund světa!"
+
+  # Formát odpočtu (každou vteřinu, nahrazuje {seconds})
+  countdown-format: "§e[HARDCORE] {seconds}..."
+
+  # Pojištění – úspěšné vykoupení světa
+  insurance-success: "§a§l[POJISTKA] Svět byl vykoupen! {player} obětoval Totem oživení!"
+
+  # Pojištění – není aktivní odpočet
+  no-countdown: "§cŽádný wipe odpočet právě neprobíhá."
+
+  # Pojištění – hráč nedrží totem
+  no-totem: "§cMusíš držet Totem oživení v hlavní ruce!"
+
+  # Příkaz může použít pouze hráč (ne konzole)
+  player-only: "§cTento příkaz může použít pouze hráč."
+
+  # Seznam mrtvých – hlavička
+  deadlist-header: "§6§l=== SÍŇ HANBY - Historie wipe runů ==="
+
+  # Seznam mrtvých – prázdný
+  deadlist-empty: "§eŽádné předchozí runy nebyly nalezeny."
+
+  # Seznam mrtvých – formát položky
+  deadlist-format: "§7#{runId} §c{player} §7- {deathMessage} §8({timestamp})"
+
+  # Po dokončení countdownu
+  worlds-deleted: "§c[HARDCORE] Světy budou smazány při příštím startu. Server se vypíná."

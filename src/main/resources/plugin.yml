@@ -1,0 +1,16 @@
+name: HardcoreWipe
+version: 2.1.0
+main: cz.deefeen.hardcore.HardcorePlugin
+api-version: '1.21'
+author: deefeen
+description: Hardcore roguelike plugin - doomsday countdown, stats, soul insurance, scoreboard.
+commands:
+  hc:
+    description: HardcoreWipe admin prikazy
+    usage: /<command> stat reset
+  soulinsure:
+    description: Obětuj Totem oživení pro zrušení wipu
+    usage: /<command>
+  deadlist:
+    description: Zobrazí historii wipe runů
+    usage: /<command>
