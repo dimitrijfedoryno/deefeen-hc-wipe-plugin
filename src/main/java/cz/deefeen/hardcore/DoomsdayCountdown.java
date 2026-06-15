@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 public class DoomsdayCountdown {
 
     private final HardcorePlugin plugin;
+    private final LocaleManager locale;
     private final String deadPlayerName;
     private final int totalSeconds;
     private final String bossBarTitle;
@@ -23,12 +24,13 @@ public class DoomsdayCountdown {
     private int taskId = -1;
     private int secondsLeft;
 
-    public DoomsdayCountdown(HardcorePlugin plugin, String deadPlayerName, int totalSeconds,
+    public DoomsdayCountdown(HardcorePlugin plugin, LocaleManager locale, String deadPlayerName, int totalSeconds,
                              String bossBarTitle, BarColor bossBarColor, BarStyle bossBarStyle,
                              String tickSound, float tickPitch,
                              String alarmSound, float alarmPitch,
                              Runnable onWipe) {
         this.plugin = plugin;
+        this.locale = locale;
         this.deadPlayerName = deadPlayerName;
         this.totalSeconds = totalSeconds;
         this.bossBarTitle = bossBarTitle;
@@ -110,9 +112,9 @@ public class DoomsdayCountdown {
         }
 
         if (secondsLeft == 10) {
-            Bukkit.broadcastMessage(plugin.getConfig().getString("messages.ten-seconds", "§e[HARDCORE] Zbývá posledních 10 sekund světa!"));
+            Bukkit.broadcastMessage(locale.get("countdown.ten-seconds"));
         } else if (secondsLeft <= 5 && secondsLeft > 0) {
-            String msg = plugin.getConfig().getString("messages.countdown-format", "§e[HARDCORE] {seconds}...");
+            String msg = locale.get("countdown.format");
             Bukkit.broadcastMessage(msg.replace("{seconds}", String.valueOf(secondsLeft)));
         }
 

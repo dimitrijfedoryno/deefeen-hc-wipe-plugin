@@ -25,6 +25,7 @@ public class StatsManager {
     private final List<RunEntry> runs = new ArrayList<>();
     private int nextRunId = 1;
     private int wipeCount = 0;
+    private long uptimeSeconds = 0;
 
     public StatsManager(File dataFolder) {
         this.file = new File(dataFolder, "stats.json");
@@ -49,6 +50,7 @@ public class StatsManager {
                 }
                 nextRunId = data.nextRunId;
                 wipeCount = data.wipeCount;
+                uptimeSeconds = data.uptimeSeconds;
             }
         } catch (IOException e) {
             runs.clear();
@@ -62,7 +64,7 @@ public class StatsManager {
             file.getParentFile().mkdirs();
         }
         try (Writer writer = new FileWriter(file)) {
-            gson.toJson(new StatsData(nextRunId, wipeCount, runs), writer);
+            gson.toJson(new StatsData(nextRunId, wipeCount, uptimeSeconds, runs), writer);
         } catch (IOException e) {
             // silent
         }
@@ -96,17 +98,27 @@ public class StatsManager {
         save();
     }
 
+    public long getUptimeSeconds() {
+        return uptimeSeconds;
+    }
+
+    public void setUptimeSeconds(long seconds) {
+        this.uptimeSeconds = seconds;
+    }
+
     private static class StatsData {
         int nextRunId;
         int wipeCount;
+        long uptimeSeconds;
         List<RunEntry> runs;
 
         StatsData() {
         }
 
-        StatsData(int nextRunId, int wipeCount, List<RunEntry> runs) {
+        StatsData(int nextRunId, int wipeCount, long uptimeSeconds, List<RunEntry> runs) {
             this.nextRunId = nextRunId;
             this.wipeCount = wipeCount;
+            this.uptimeSeconds = uptimeSeconds;
             this.runs = runs;
         }
     }

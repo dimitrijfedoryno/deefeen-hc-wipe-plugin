@@ -9,9 +9,14 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
@@ -30,6 +35,16 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
     private DoomsdayCountdown countdown;
     private HcScoreboard hcScoreboard;
     private DiscordWebhook webhook;
+    private UptimeManager uptimeManager;
+    private LocaleManager locale;
+
+    public StatsManager getStatsManager() {
+        return statsManager;
+    }
+
+    public LocaleManager getLocale() {
+        return locale;
+    }
 
     @Override
     public void onEnable() {
@@ -37,6 +52,8 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
         reloadConfig();
 
         checkConfigVersion();
+
+        locale = new LocaleManager(getConfig().getString("locale", "cz"));
 
         statsManager = new StatsManager(getDataFolder());
 
@@ -48,8 +65,8 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
             );
         }
 
-        String title = getConfig().getString("scoreboard.title", "§6§lHARDCORE");
-        String line = getConfig().getString("scoreboard.line", "§cSmrtí");
+        String title = locale.get("scoreboard.title");
+        String line = locale.get("scoreboard.line");
         hcScoreboard = new HcScoreboard(title, line, statsManager.getWipeCount());
         hcScoreboard.applyToAll();
 
@@ -64,11 +81,24 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
         }
 
         getServer().getPluginManager().registerEvents(this, this);
+
+        if (getConfig().getBoolean("uptime.enabled", true)) {
+            uptimeManager = new UptimeManager(this, statsManager.getUptimeSeconds());
+            uptimeManager.start();
+        }
+
         getLogger().info("HardcoreWipe plugin enabled.");
     }
 
     @Override
     public void onDisable() {
+        if (uptimeManager != null) {
+            statsManager.setUptimeSeconds(uptimeManager.getUptimeSeconds());
+            statsManager.save();
+            uptimeManager.stop();
+            uptimeManager = null;
+        }
+
         if (countdown != null) {
             countdown.cancel();
             countdown = null;
@@ -119,14 +149,13 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
         statsManager.addRun(name, deathMsg);
 
         int seconds = getConfig().getInt("countdown-seconds", 30);
-        String msg = getConfig().getString("messages.death-broadcast",
-                "§c[HARDCORE] Hráč {player} zemřel! Celý svět bude smazán a server se restartuje za {seconds} sekund!");
-        Bukkit.broadcastMessage(msg.replace("{player}", name).replace("{seconds}", String.valueOf(seconds)));
+        String msg = locale.format("death-broadcast", "player", name, "seconds", String.valueOf(seconds));
+        Bukkit.broadcastMessage(msg);
 
         countdown = new DoomsdayCountdown(
-                this, name,
+                this, locale, name,
                 seconds,
-                getConfig().getString("bossbar.title", "§c§lDOOMSDAY: Smazání světa za {seconds} sekund!"),
+                locale.get("bossbar.title"),
                 BarColor.valueOf(getConfig().getString("bossbar.color", "RED")),
                 BarStyle.valueOf(getConfig().getString("bossbar.style", "SOLID")),
                 getConfig().getString("sounds.tick", "block.note_block.click"),
@@ -141,15 +170,15 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
             int wc = statsManager.getWipeCount() + 1;
             if (getConfig().getBoolean("discord-webhook.embed.enabled", true)) {
                 webhook.sendEmbed(
-                        resolve(getConfig().getString("discord-webhook.trigger-title", "☠ WIPE TRIGGERED"), name, seconds, wc, deathMsg),
-                        resolve(getConfig().getString("discord-webhook.trigger-description", "**{player}** zemřel a spustil wipe č. **{wipe_count}**"), name, seconds, wc, deathMsg),
+                        resolve(locale.get("discord.trigger-title"), name, seconds, wc, deathMsg),
+                        resolve(locale.get("discord.trigger-description"), name, seconds, wc, deathMsg),
                         getConfig().getInt("discord-webhook.embed.color", 16711680),
-                        "Hráč", name,
-                        "Wipe č.", String.valueOf(wc),
-                        "Zbývá", seconds + "s"
+                        locale.get("discord.field-player"), name,
+                        locale.get("discord.field-wipe"), String.valueOf(wc),
+                        locale.get("discord.field-remaining"), seconds + "s"
                 );
             } else {
-                webhook.send(resolve(getConfig().getString("discord-webhook.trigger-description", "**{player}** zemřel a spustil wipe č. **{wipe_count}**"), name, seconds, wc, deathMsg));
+                webhook.send(resolve(locale.get("discord.trigger-description"), name, seconds, wc, deathMsg));
             }
         }
     }
@@ -161,11 +190,64 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
         }
     }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerDamage(EntityDamageEvent event) {
+        if (!getConfig().getBoolean("damage-notifications.enabled", true)) return;
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (player.isDead()) return;
+
+        double damage = event.getFinalDamage();
+        if (damage <= 0) return;
+
+        double hearts = damage / 2.0;
+        String damageStr = String.format("%.1f", hearts);
+
+        String msg;
+        if (event instanceof EntityDamageByEntityEvent entityEvent) {
+            String entity = getEntityName(entityEvent.getDamager());
+            msg = locale.format("damage.entity", "damage", damageStr, "entity", entity);
+        } else {
+            String cause = friendlyName(event.getCause().name());
+            msg = locale.format("damage.environment", "damage", damageStr, "cause", cause);
+        }
+        Bukkit.broadcastMessage(msg);
+    }
+
+    private String getEntityName(Entity damager) {
+        if (damager instanceof Player attacker) {
+            return attacker.getName();
+        }
+        if (damager instanceof Projectile projectile) {
+            if (projectile.getShooter() instanceof Player shooter) {
+                return shooter.getName();
+            }
+            if (projectile.getShooter() instanceof LivingEntity shooter) {
+                return friendlyName(shooter.getType().name());
+            }
+        }
+        return friendlyName(damager.getType().name());
+    }
+
+    private String friendlyName(String enumName) {
+        String[] parts = enumName.toLowerCase().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            sb.append(part.substring(1));
+        }
+        return sb.toString();
+    }
+
     private void onWipeExecuted() {
         statsManager.incrementWipeCount();
         int wc = statsManager.getWipeCount();
         hcScoreboard.increment();
         hcScoreboard.applyToAll();
+
+        if (uptimeManager != null) {
+            uptimeManager.reset();
+        }
 
         try {
             new File(getDataFolder(), "wipe.flag").createNewFile();
@@ -178,21 +260,20 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
             createWipeFlag();
         }
 
-        Bukkit.broadcastMessage(getConfig().getString("messages.worlds-deleted",
-                "§c[HARDCORE] Světy budou smazány při příštím startu. Server se vypíná."));
+        Bukkit.broadcastMessage(locale.get("worlds-deleted"));
 
         if (webhook != null && countdown != null) {
             String player = countdown.getDeadPlayerName();
             if (getConfig().getBoolean("discord-webhook.embed.enabled", true)) {
                 webhook.sendEmbed(
-                        resolve(getConfig().getString("discord-webhook.complete-title", "✅ WIPE COMPLETE"), player, 0, wc, null),
-                        resolve(getConfig().getString("discord-webhook.complete-description", "Svět smazán po smrti **{player}** (wipe č. **{wipe_count}**). Server se restartuje."), player, 0, wc, null),
+                        resolve(locale.get("discord.complete-title"), player, 0, wc, null),
+                        resolve(locale.get("discord.complete-description"), player, 0, wc, null),
                         getConfig().getInt("discord-webhook.embed.color", 16711680),
-                        "Hráč", player,
-                        "Wipe č.", String.valueOf(wc)
+                        locale.get("discord.field-player"), player,
+                        locale.get("discord.field-wipe"), String.valueOf(wc)
                 );
             } else {
-                webhook.send(resolve(getConfig().getString("discord-webhook.complete-description", "Svět smazán po smrti **{player}** (wipe č. **{wipe_count}**). Server se restartuje."), player, 0, wc, null));
+                webhook.send(resolve(locale.get("discord.complete-description"), player, 0, wc, null));
             }
         }
 
@@ -313,30 +394,30 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
 
     private boolean handleHc(CommandSender sender, String[] args) {
         if (args.length < 2 || !args[0].equalsIgnoreCase("stat") || !args[1].equalsIgnoreCase("reset")) {
-            sender.sendMessage("§cPoužití: /hc stat reset");
+            sender.sendMessage(locale.get("hc.usage"));
             return true;
         }
         statsManager.resetWipeCount();
         hcScoreboard.reset();
         hcScoreboard.applyToAll();
-        sender.sendMessage("§aStatistiky smrtí byly resetovány.");
+        sender.sendMessage(locale.get("hc.reset-success"));
         return true;
     }
 
     private boolean handleSoulInsure(CommandSender sender) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(getConfig().getString("messages.player-only", "§cTento příkaz může použít pouze hráč."));
+            sender.sendMessage(locale.get("player-only"));
             return true;
         }
 
         if (countdown == null || !countdown.isRunning()) {
-            sender.sendMessage(getConfig().getString("messages.no-countdown", "§cŽádný wipe odpočet právě neprobíhá."));
+            sender.sendMessage(locale.get("insurance.no-countdown"));
             return true;
         }
 
         ItemStack mainHand = player.getInventory().getItemInMainHand();
         if (mainHand.getType() != Material.TOTEM_OF_UNDYING) {
-            sender.sendMessage(getConfig().getString("messages.no-totem", "§cMusíš držet Totem oživení v hlavní ruce!"));
+            sender.sendMessage(locale.get("insurance.no-totem"));
             return true;
         }
 
@@ -360,22 +441,21 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
             deadPlayer.teleport(spawn);
         }
 
-        String successMsg = getConfig().getString("messages.insurance-success",
-                "§a§l[POJISTKA] Svět byl vykoupen! {player} obětoval Totem oživení!");
-        Bukkit.broadcastMessage(successMsg.replace("{player}", player.getName()));
+        String successMsg = locale.format("insurance.success", "player", player.getName());
+        Bukkit.broadcastMessage(successMsg);
 
         if (webhook != null) {
             int wc = statsManager.getWipeCount();
             if (getConfig().getBoolean("discord-webhook.embed.enabled", true)) {
                 webhook.sendEmbed(
-                        resolve(getConfig().getString("discord-webhook.insured-title", "💚 SOUL INSURANCE"), player.getName(), 0, wc, null),
-                        resolve(getConfig().getString("discord-webhook.insured-description", "**{player}** obětoval Totem oživení a zachránil wipe č. **{wipe_count}**!"), player.getName(), 0, wc, null),
+                        resolve(locale.get("discord.insured-title"), player.getName(), 0, wc, null),
+                        resolve(locale.get("discord.insured-description"), player.getName(), 0, wc, null),
                         65280,
-                        "Zachránce", player.getName(),
-                        "Mrtvý hráč", deadName
+                        locale.get("discord.field-savior"), player.getName(),
+                        locale.get("discord.field-dead"), deadName
                 );
             } else {
-                webhook.send(resolve(getConfig().getString("discord-webhook.insured-description", "**{player}** obětoval Totem oživení a zachránil wipe č. **{wipe_count}**!"), player.getName(), 0, wc, null));
+                webhook.send(resolve(locale.get("discord.insured-description"), player.getName(), 0, wc, null));
             }
         }
 
@@ -385,12 +465,12 @@ public final class HardcorePlugin extends JavaPlugin implements Listener {
     private boolean handleDeadlist(CommandSender sender) {
         var runs = statsManager.getRuns();
         if (runs.isEmpty()) {
-            sender.sendMessage(getConfig().getString("messages.deadlist-empty", "§eŽádné předchozí runy nebyly nalezeny."));
+            sender.sendMessage(locale.get("deadlist.empty"));
             return true;
         }
 
-        sender.sendMessage(getConfig().getString("messages.deadlist-header", "§6§l=== SÍŇ HANBY - Historie wipe runů ==="));
-        String format = getConfig().getString("messages.deadlist-format", "§7#{runId} §c{player} §7- {deathMessage} §8({timestamp})");
+        sender.sendMessage(locale.get("deadlist.header"));
+        String format = locale.get("deadlist.format");
         for (RunEntry run : runs) {
             sender.sendMessage(format
                     .replace("{runId}", String.valueOf(run.runId()))
