@@ -1,7 +1,7 @@
-name: HardcoreWipe
+name: DeeFeenHC
 version: 2.1.0
 main: cz.deefeen.hardcore.HardcorePlugin
-api-version: '1.21'
+api-version: '1.21.5'
 author: deefeen
 description: Hardcore roguelike plugin - doomsday countdown, stats, soul insurance, scoreboard.
 commands:
